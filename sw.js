@@ -1,7 +1,7 @@
 // Neon Surge service worker: lets the game open without a connection once it has been loaded.
 // Strategy: serve from cache instantly, refresh the cache in the background (stale-while-revalidate),
 // so a new deploy shows up on the next launch.
-const CACHE = 'neon-surge-v1';
+const CACHE = 'neon-surge-v2';
 const ASSETS = ['./', 'index.html', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'apple-touch-icon.png'];
 
 self.addEventListener('install', (e) => {
