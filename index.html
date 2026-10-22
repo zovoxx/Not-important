@@ -6,6 +6,12 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="theme-color" content="#04050a">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Neon Surge">
+<meta name="description" content="Neon Surge - a fast neon arena survival shooter for your phone.">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/svg+xml" href="icon.svg">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <title>Neon Surge</title>
 <style>
   :root {
@@ -2669,6 +2675,11 @@ resize();
 UI.refreshToggles();
 UI.show('startScreen');
 requestAnimationFrame(frame);
+
+// Offline support when hosted (Cloudflare Pages etc.). Skipped for file:// so the file still works standalone.
+if ('serviceWorker' in navigator && /^https?:$/.test(location.protocol)) {
+  window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => {}); });
+}
 </script>
 </body>
 </html>
