@@ -209,11 +209,13 @@ const CONFIG = {
 
   player: {
     maxHp: 100,
-    speed: 290,                      // units / s
+    speed: 275,                      // units / s
     accel: 14,                       // velocity smoothing
     radius: 14,                      // visual radius
     hitRadius: 8,                    // forgiving hitbox
-    invuln: 0.9,                     // seconds of invulnerability after a hit
+    invuln: 0.7,                     // seconds of invulnerability after a hit
+    hitStop: 0.07,                   // brief freeze-frame when you get hit (weight)
+    lowHp: 0.35,                     // below this fraction: heartbeat, red edges, muffled music
     fireRate: 6.5,                   // shots / s
     bulletSpeed: 920,
     bulletDamage: 10,
@@ -225,6 +227,17 @@ const CONFIG = {
     dashTime: 0.13,
     dashCooldown: 1.6,
     doubleTapMs: 300,
+    // Aim assist: shots bend toward an enemy close to where you aim (no full auto-aim).
+    aimAssist: { cone: 0.2, range: 480, strength: 0.7 },
+  },
+
+  // Healing is scarce on purpose: every hit should matter.
+  healing: {
+    regenDelay: 4,                   // Regeneration only works after this many seconds without being hit
+    regenPerLevel: 0.4,              // HP / s per Regeneration level
+    vampirePerLevel: 0.2,            // HP per kill per Vampire level
+    secondWindHp: 0.35,              // Second Wind revives with this fraction of max HP
+    maxHpPerPick: 15,
   },
 
   // Every level-up banks one upgrade pick. Picks are spent when a wave is cleared.
@@ -237,9 +250,9 @@ const CONFIG = {
   combo: { window: 2.5, killsPerStep: 3, max: 10 },
 
   pickups: {
-    dropChance: 0.06,                // per normal kill
-    weights: { health: 3, shield: 2, bomb: 1.2, magnet: 1.6 },
-    healthAmount: 30,
+    dropChance: 0.04,                // per normal kill
+    weights: { health: 2.5, shield: 2, bomb: 1.2, magnet: 1.6 },
+    healthAmount: 20,
     shieldTime: 5,
     life: 14,                        // seconds before a pickup fades
   },
@@ -253,13 +266,15 @@ const CONFIG = {
     countdown: 1.6,                  // "WAVE N" banner before the next wave
     bossWarning: 3,
     clearDelay: 1.8,                 // after the boss dies, before the round-end screen
-    healOnClear: 0.3,                // fraction of max HP repaired after each round
+    healOnClear: 0.2,                // fraction of max HP repaired after each round
     bonusPicks: 1,                   // extra normal picks at every round end (plus the boss reward)
     rerollsStart: 1,                 // rerolls at the start of a run
     rerollsPerRound: 1,              // rerolls gained per round cleared
     groupDelay: 1.25,                // seconds between groups inside a wave
     maxAlive: (r) => Math.min(34, 12 + r * 3),   // groups wait while this many enemies are alive
-    hpPerRound: 0.32,                // enemy hp +32% per round
+    hpPerRound: 0.32,                // enemy hp +32% per round...
+    hpPerRoundSq: 0.06,              // ...plus a growing extra, so late rounds keep up with strong builds
+    dmgPerRound: 0.06,               // enemy damage +6% per round
     speedPerRound: 0.04, speedMax: 1.35,
     // Hand-made first rounds: each introduces new enemies. After these, rounds are generated.
     plans: [
@@ -288,36 +303,38 @@ const CONFIG = {
     // generated rounds: typical group size and pick weight per type
     groupSize: { grunt: 5, mite: 7, charger: 2, gunner: 2, blob: 2, watcher: 3, fuse: 2, warden: 2, phantom: 2 },
     weight:    { grunt: 4, mite: 2, charger: 3, gunner: 3, blob: 2, watcher: 2, fuse: 2, warden: 1.5, phantom: 2 },
+    rangedRamp: 0.2,                 // shooters get +20% weight per generated round (keeps kiting honest)
   },
 
   // name/blurb are shown the first time an enemy shows up in a run
   enemies: {
-    grunt:    { name: 'GRUNT', blurb: 'Flanks you, then lunges', hp: 30, speed: 135, r: 22, dmg: 10, xp: 2, score: 10, color: '#ff3355',
-                lungeDist: 150, lungeWind: 0.35, lungeSpeed: 540, lungeTime: 0.24, lungeCd: 2.2 },
-    mite:     { name: 'MITES', blurb: 'Tiny, fast, come in packs', hp: 6, speed: 190, r: 11, dmg: 5, xp: 1, score: 4, color: '#33f6ff' },
-    charger:  { name: 'CHARGER', blurb: 'Aims, then charges in a line. Dizzy if it hits a wall', hp: 60, speed: 95, r: 26, dmg: 18, xp: 4, score: 25, color: '#ffe23a',
-                windup: 0.7, chargeSpeed: 660, chargeTime: 0.65, rest: 0.8, stun: 1.4, triggerDist: 400 },
-    blob:     { name: 'BLOB', blurb: 'Splits into three when popped', hp: 75, speed: 75, r: 30, dmg: 12, xp: 4, score: 25, color: '#44ff77' },
-    blobling: { name: 'BLOBLING', blurb: '', hp: 14, speed: 180, r: 13, dmg: 6, xp: 1, score: 5, color: '#a8ff9d' },
-    gunner:   { name: 'GUNNER', blurb: 'Keeps its distance and leads its shots', hp: 45, speed: 110, r: 23, dmg: 10, xp: 4, score: 30, color: '#b455ff',
-                fireEvery: 1.8, aimTime: 0.5, bulletSpeed: 260, keepDist: 320, bulletDmg: 10 },
-    watcher:  { name: 'WATCHER', blurb: 'Circles you, closing in, and shoots', hp: 55, speed: 200, r: 24, dmg: 12, xp: 4, score: 30, color: '#3d7bff',
-                startRadius: 400, shrink: 18, minRadius: 70, fireEvery: 3.2, bulletSpeed: 230, bulletDmg: 9 },
+    grunt:    { name: 'GRUNT', blurb: 'Flanks you, then lunges', hp: 30, speed: 148, r: 22, dmg: 14, xp: 2, score: 10, color: '#ff3355',
+                lungeDist: 150, lungeWind: 0.35, lungeSpeed: 580, lungeTime: 0.24, lungeCd: 2.2 },
+    mite:     { name: 'MITES', blurb: 'Tiny, fast, come in packs', hp: 6, speed: 205, r: 11, dmg: 7, xp: 1, score: 4, color: '#33f6ff' },
+    charger:  { name: 'CHARGER', blurb: 'Aims, then charges in a line. Dizzy if it hits a wall', hp: 60, speed: 95, r: 26, dmg: 22, xp: 4, score: 25, color: '#ffe23a',
+                windup: 0.7, chargeSpeed: 700, chargeTime: 0.65, rest: 0.8, stun: 1.4, triggerDist: 400 },
+    blob:     { name: 'BLOB', blurb: 'Splits into three when popped', hp: 75, speed: 75, r: 30, dmg: 15, xp: 4, score: 25, color: '#44ff77' },
+    blobling: { name: 'BLOBLING', blurb: '', hp: 14, speed: 180, r: 13, dmg: 8, xp: 1, score: 5, color: '#a8ff9d' },
+    gunner:   { name: 'GUNNER', blurb: 'Keeps its distance and leads its shots', hp: 45, speed: 110, r: 23, dmg: 12, xp: 4, score: 30, color: '#b455ff',
+                fireEvery: 1.8, aimTime: 0.5, bulletSpeed: 290, keepDist: 320, bulletDmg: 13 },
+    watcher:  { name: 'WATCHER', blurb: 'Circles you, closing in, and shoots', hp: 55, speed: 200, r: 24, dmg: 14, xp: 4, score: 30, color: '#3d7bff',
+                startRadius: 400, shrink: 18, minRadius: 70, fireEvery: 3.2, bulletSpeed: 230, bulletDmg: 12 },
     fuse:     { name: 'FUSE', blurb: 'Runs at you and explodes. Keep away!', hp: 60, speed: 135, r: 25, dmg: 30, xp: 5, score: 40, color: '#ff8a1f',
                 fuse: 1.2, blastR: 125, triggerDist: 120 },
-    warden:   { name: 'WARDEN', blurb: 'Shield blocks shots from the front. Flank it', hp: 110, speed: 85, r: 28, dmg: 16, xp: 7, score: 60, color: '#f2f6ff',
+    warden:   { name: 'WARDEN', blurb: 'Shield blocks shots from the front. Flank it', hp: 110, speed: 85, r: 28, dmg: 20, xp: 7, score: 60, color: '#f2f6ff',
                 shieldHp: 90, shieldArc: 1.2, turnRate: 1.6, bashEvery: 3.5, bashWind: 0.45, bashSpeed: 430, bashTime: 0.3 },
-    phantom:  { name: 'PHANTOM', blurb: 'Blinks next to you and fires a burst', hp: 55, speed: 60, r: 23, dmg: 10, xp: 6, score: 50, color: '#ff5cd6',
-                idle: [1.4, 2.4], blinkTime: 0.28, burst: 4, bulletSpeed: 270, bulletDmg: 9, blinkMin: 170, blinkMax: 290 },
+    phantom:  { name: 'PHANTOM', blurb: 'Blinks next to you and fires a burst', hp: 55, speed: 60, r: 23, dmg: 12, xp: 6, score: 50, color: '#ff5cd6',
+                idle: [1.4, 2.4], blinkTime: 0.28, burst: 4, bulletSpeed: 270, bulletDmg: 11, blinkMin: 170, blinkMax: 290 },
   },
 
   bosses: {
     order: ['spiral', 'ring', 'summoner'],
-    hpPerRound: 0.55,                // +55% boss hp per round
+    hpPerRound: 0.5,                 // +50% boss hp per round...
+    hpPerRoundSq: 0.08,              // ...plus a growing extra
     xpDrop: 50,
-    spiral:   { name: 'SPIRAL CORE', hp: 1100, speed: 70, r: 62, dmg: 25, color: '#ff3df2', score: 2500, fireEvery: 0.1, arms: 4, spin: 1.9, bulletSpeed: 230, bulletDmg: 11 },
-    ring:     { name: 'RING WARDEN', hp: 1300, speed: 85, r: 58, dmg: 25, color: '#33f6ff', score: 2800, ringEvery: 2.4, ringCount: 34, gapSize: 5, bulletSpeed: 170, bulletDmg: 12 },
-    summoner: { name: 'THE SUMMONER', hp: 1400, speed: 110, r: 56, dmg: 25, color: '#ffe23a', score: 3000, summonEvery: 4, summonCount: 5, fireEvery: 1.6, bulletSpeed: 240, bulletDmg: 10 },
+    spiral:   { name: 'SPIRAL CORE', hp: 1100, speed: 70, r: 62, dmg: 30, color: '#ff3df2', score: 2500, fireEvery: 0.1, arms: 4, spin: 1.9, bulletSpeed: 230, bulletDmg: 12 },
+    ring:     { name: 'RING WARDEN', hp: 1300, speed: 85, r: 58, dmg: 30, color: '#33f6ff', score: 2800, ringEvery: 2.4, ringCount: 34, gapSize: 5, bulletSpeed: 170, bulletDmg: 12 },
+    summoner: { name: 'THE SUMMONER', hp: 1400, speed: 110, r: 56, dmg: 30, color: '#ffe23a', score: 3000, summonEvery: 4, summonCount: 5, fireEvery: 1.6, bulletSpeed: 240, bulletDmg: 12 },
   },
 
   enemyBullet: { radius: 7, life: 6 },
@@ -325,9 +342,9 @@ const CONFIG = {
   // upgrade caps (max stacks). Effects are in the UPGRADES section.
   caps: {
     multishot: 4, pierce: 3, bounce: 2, rapid: 6, heavy: 6, blades: 5, chain: 3,
-    explosive: 3, dash: 3, slowmo: 1, magnet: 4, regen: 4, maxhp: 5, speed: 4,
+    explosive: 3, dash: 3, slowmo: 1, magnet: 4, regen: 3, maxhp: 5, speed: 4,
     // boss-reward (epic) upgrades
-    glass: 1, overdrive: 2, secondwind: 1, nova: 3, homing: 2, drones: 2, vampire: 3,
+    glass: 1, overdrive: 2, secondwind: 1, nova: 3, homing: 2, drones: 2, vampire: 2,
   },
 
   slowmo: { threshold: 0.3, duration: 2, scale: 0.35, cooldown: 30 },
@@ -457,7 +474,9 @@ const Sound = {
         comp.connect(ctx.destination);
         this.master = ctx.createGain(); this.master.gain.value = 0.9; this.master.connect(comp);
         this.sfxBus = ctx.createGain(); this.sfxBus.gain.value = 0.75; this.sfxBus.connect(this.master);
-        this.musicBus = ctx.createGain(); this.musicBus.gain.value = Settings.music ? 0.3 : 0; this.musicBus.connect(this.master);
+        this.musicBus = ctx.createGain(); this.musicBus.gain.value = Settings.music ? 0.3 : 0;
+        this.musicFilter = ctx.createBiquadFilter(); this.musicFilter.type = 'lowpass'; this.musicFilter.frequency.value = 18000;
+        this.musicBus.connect(this.musicFilter); this.musicFilter.connect(this.master);
         // arp echo
         this.delay = ctx.createDelay(1);
         const fb = ctx.createGain(); fb.gain.value = 0.32;
@@ -527,6 +546,12 @@ const Sound = {
     this.musicBus.gain.setTargetAtTime(v, this.ctx.currentTime, 0.08);
   },
   duck(on) { this.music.ducked = on; this.setMusicVolume(); },
+  // low HP: music sounds muffled, like you're about to black out
+  muffle(on) {
+    if (!this.ctx || this.muffled === on) return;
+    this.muffled = on;
+    this.musicFilter.frequency.setTargetAtTime(on ? 650 : 18000, this.ctx.currentTime, 0.25);
+  },
   pump() {
     const m = this.music, ctx = this.ctx;
     if (!ctx || !m.on || ctx.state !== 'running') return;
@@ -627,6 +652,11 @@ const SFX = {
     S.tone('sine', 110, 25, 1.6, 0.5);
     const t = S.ctx.currentTime;
     [57, 64, 69, 76].forEach((n, i) => S.tone('triangle', midiHz(n), midiHz(n), 0.5, 0.08, { when: t + 0.3 + i * 0.1 }));
+  },
+  heartbeat(S) {
+    const t = S.ctx.currentTime;
+    S.tone('sine', 70, 38, 0.14, 0.45, { when: t });
+    S.tone('sine', 62, 34, 0.12, 0.3, { when: t + 0.16 });
   },
   slowmo(S) { S.tone('sine', 900, 120, 0.8, 0.12, { attack: 0.02 }); },
   gameOver(S) {
@@ -1060,7 +1090,7 @@ const Game = {
   roundKills: 0, roundStart: 0, bossesKilled: 0,
   seen: {}, intro: null, introTimer: 0,       // first-sighting enemy intro
   boss: null,
-  shake: 0, hitFlash: 0, flash: 0, flashColor: '#ffffff',
+  shake: 0, hitFlash: 0, flash: 0, flashColor: '#ffffff', hitStop: 0, heartTimer: 0,
   borderColor: '#33f6ff',
   banner: '', bannerTimer: 0,
   xpStreak: 0, xpStreakTimer: 0,
@@ -1069,7 +1099,7 @@ const Game = {
 const player = {
   x: 0, y: 0, vx: 0, vy: 0, angle: 0, hp: 100, maxHp: 100,
   invuln: 0, fireTimer: 0, dashCd: 0, dashTimer: 0, dashDx: 0, dashDy: 0,
-  shieldTimer: 0, lastMoveX: 1, lastMoveY: 0, firing: false, regenAcc: 0,
+  shieldTimer: 0, lastMoveX: 1, lastMoveY: 0, firing: false, regenAcc: 0, hitAgo: 99, hpGhost: 100, ghostDelay: 0,
   bladeAngle: 0, trailTimer: 0, novaTimer: 0, droneTimer: 0, revived: false,
   // upgrade levels
   up: {},
@@ -1168,7 +1198,7 @@ function firePlayer() {
 function spawnEnemyBullet(x, y, angle, speed, dmg) {
   const b = eBullets.spawn(); if (!b) return;
   b.x = x; b.y = y; b.vx = Math.cos(angle) * speed; b.vy = Math.sin(angle) * speed;
-  b.life = CONFIG.enemyBullet.life; b.dmg = dmg; b.r = CONFIG.enemyBullet.radius; b.spin = Math.random() * TAU;
+  b.life = CONFIG.enemyBullet.life; b.dmg = Math.round(dmg * Rounds.dmgMul()); b.r = CONFIG.enemyBullet.radius; b.spin = Math.random() * TAU;
 }
 
 // Returns true if the enemy died.
@@ -1228,7 +1258,7 @@ function killEnemy(e) {
   if (Math.random() < CONFIG.pickups.dropChance) dropPickup(e.x, e.y);
 
   // Splitter -> 3 minis
-  if (U('vampire') && player.hp > 0) player.hp = Math.min(player.maxHp, player.hp + U('vampire'));
+  if (U('vampire') && player.hp > 0) player.hp = Math.min(player.maxHp, player.hp + U('vampire') * CONFIG.healing.vampirePerLevel);
   Game.roundKills++;
 
   if (e.type === 'blob') {
@@ -1266,7 +1296,7 @@ function explodeAt(x, y, r, dmg, hurtPlayer, color, quietSmall) {
   if (Game.boss && !Game.boss.dead && dist2(x, y, Game.boss.x, Game.boss.y) < (r + Game.boss.r) ** 2) damageEnemy(Game.boss, dmg * 0.5, undefined, undefined, { quiet: true });
   if (hurtPlayer) {
     const rr = r + CONFIG.player.hitRadius;
-    if (dist2(x, y, player.x, player.y) < rr * rr) hurtPlayerBy(CONFIG.enemies.fuse.dmg);
+    if (dist2(x, y, player.x, player.y) < rr * rr) hurtPlayerBy(Math.round(CONFIG.enemies.fuse.dmg * Rounds.dmgMul()));
   }
 }
 
@@ -1368,6 +1398,8 @@ function hurtPlayerBy(dmg) {
   }
   player.hp -= dmg;
   player.invuln = CONFIG.player.invuln;
+  player.hitAgo = 0; player.ghostDelay = 0.45;
+  Game.hitStop = CONFIG.player.hitStop;
   Game.hitFlash = 0.25;
   addShake(9);
   spark(player.x, player.y, '#ff3355', 16, 340, 0.4, 3.5);
@@ -1377,7 +1409,7 @@ function hurtPlayerBy(dmg) {
   // combo is cut by a hit? No — only by not killing. Keep it fun.
   if (player.hp <= 0) {
     if (U('secondwind') && !player.revived) {          // epic: cheat death once
-      player.revived = true; player.hp = player.maxHp * 0.5; player.invuln = 2;
+      player.revived = true; player.hp = Math.round(player.maxHp * CONFIG.healing.secondWindHp); player.invuln = 2;
       banner('SECOND WIND', 1.6); Game.flash = 0.4; Game.flashColor = '#ffffff';
       explodeAt(player.x, player.y, 220, 200, false, '#ffffff');
       return;
@@ -1403,9 +1435,9 @@ function spawnEnemy(type, x, y, immediate) {
   e.type = type; e.def = d; e.isBoss = isBoss;
   e.x = clamp(x, d.r, CONFIG.arena.w - d.r); e.y = clamp(y, d.r, CONFIG.arena.h - d.r);
   e.vx = e.vy = 0; e.r = d.r;
-  e.maxHp = e.hp = isBoss ? Math.round(d.hp * (1 + CONFIG.bosses.hpPerRound * (Game.round - 1))) : Math.ceil(d.hp * Rounds.hpMul());
+  e.maxHp = e.hp = isBoss ? Math.round(d.hp * Rounds.bossHpMul()) : Math.ceil(d.hp * Rounds.hpMul());
   e.speed = isBoss ? d.speed : d.speed * Rounds.speedMul() * rand(0.92, 1.08);
-  e.dmg = d.dmg; e.angle = Math.atan2(player.y - e.y, player.x - e.x); e.rot = 0;
+  e.dmg = Math.round(d.dmg * Rounds.dmgMul()); e.angle = Math.atan2(player.y - e.y, player.x - e.x); e.rot = 0;
   e.state = 0; e.timer = 0; e.t2 = 0; e.t3 = 0; e.flash = 0; e.dead = false; e.alpha = 1; e.bladeHit = 0;
   e.spawnFx = immediate ? 0 : 0.35;
   e.shieldHp = type === 'warden' ? d.shieldHp * Rounds.hpMul() : 0;
@@ -1711,7 +1743,7 @@ function updateBoss(e, dt, dist, toA) {
         const b = eBullets.spawn(); if (!b) break;
         b.x = player.x + Math.cos(a) * R; b.y = player.y + Math.sin(a) * R;
         b.vx = -Math.cos(a) * speed; b.vy = -Math.sin(a) * speed;
-        b.life = R / speed + 0.25; b.dmg = d.bulletDmg; b.r = CONFIG.enemyBullet.radius; b.spin = 0;
+        b.life = R / speed + 0.25; b.dmg = d.bulletDmg * Rounds.dmgMul(); b.r = CONFIG.enemyBullet.radius; b.spin = 0;
       }
       ring(player.x, player.y, R, '#33f6ff', 0.25, 2);
       Sound.play('enemyShoot');
@@ -1778,19 +1810,19 @@ const UPGRADES = [
   { id: 'dash', color: '#33f6ff', name: () => 'Dash Upgrade', desc: () => '-25% dash cooldown, +20% dash distance' },
   { id: 'slowmo', color: '#b455ff', name: () => 'Slow-Mo Reflex', desc: () => 'Below 30% HP time slows for 2s (30s cooldown)' },
   { id: 'magnet', color: '#5dffb0', name: () => 'Magnet', desc: () => '+45% XP pickup radius' },
-  { id: 'regen', color: '#ff4d7a', name: () => 'Regeneration', desc: (l) => `Heal ${((l + 1) * 0.6).toFixed(1)} HP per second` },
-  { id: 'maxhp', color: '#ff4d7a', name: () => 'Max Health Up', desc: () => '+20 max HP and heal 20' },
+  { id: 'regen', color: '#ff4d7a', name: () => 'Regeneration', desc: (l) => `After ${CONFIG.healing.regenDelay}s without getting hit, heal ${((l + 1) * CONFIG.healing.regenPerLevel).toFixed(1)} HP/s` },
+  { id: 'maxhp', color: '#ff4d7a', name: () => 'Max Health Up', desc: () => `+${CONFIG.healing.maxHpPerPick} max HP and heal ${CONFIG.healing.maxHpPerPick}` },
   { id: 'speed', color: '#ffe23a', name: () => 'Speed Up', desc: () => '+8% move speed' },
 ];
 // Boss rewards: one of these is offered after every boss. Strong, some with a price.
 const EPICS = [
   { id: 'glass', color: '#ff3355', name: () => 'Glass Cannon', desc: () => '+60% damage, but -30 max HP' },
   { id: 'overdrive', color: '#ffe23a', name: () => 'Overdrive', desc: () => '+30% fire rate and +12% move speed' },
-  { id: 'secondwind', color: '#ffffff', name: () => 'Second Wind', desc: () => 'Once per run, survive a fatal hit with 50% HP and a blast' },
+  { id: 'secondwind', color: '#ffffff', name: () => 'Second Wind', desc: () => 'Once per run, survive a fatal hit with ' + Math.round(CONFIG.healing.secondWindHp * 100) + '% HP and a blast' },
   { id: 'nova', color: '#33f6ff', name: () => 'Nova Pulse', desc: (l) => l ? 'Bigger, stronger, more frequent pulses' : 'Every 5s a shockwave blasts enemies around you' },
-  { id: 'homing', color: '#ff3df2', name: () => 'Homing Rounds', desc: (l) => l ? 'Bullets turn much harder' : 'Your bullets curve toward enemies' },
+  { id: 'homing', color: '#ff3df2', name: () => 'Homing Rounds', desc: (l) => l ? 'Bullets turn harder' : 'Your bullets curve gently toward nearby enemies' },
   { id: 'drones', color: '#9ffcff', name: () => 'Attack Drone', desc: (l) => l ? 'A second drone joins you' : 'A drone follows you and shoots enemies' },
-  { id: 'vampire', color: '#ff4d7a', name: () => 'Vampire', desc: (l) => `Every kill heals ${l + 1} HP` },
+  { id: 'vampire', color: '#ff4d7a', name: () => 'Vampire', desc: (l) => `Every kill heals ${(CONFIG.healing.vampirePerLevel * (l + 1)).toFixed(1)} HP` },
 ];
 EPICS.forEach((u) => { u.epic = true; });
 const OVERCHARGE = { id: 'overcharge', color: '#ffffff', name: () => 'Overcharge', desc: () => 'Heal 30 HP and gain 1000 score' };
@@ -1800,7 +1832,7 @@ function applyUpgrade(id) {
     player.hp = Math.min(player.maxHp, player.hp + 30); Game.score += 1000; return;
   }
   player.up[id] = (player.up[id] || 0) + 1;
-  if (id === 'maxhp') { player.maxHp += 20; player.hp = Math.min(player.maxHp, player.hp + 20); }
+  if (id === 'maxhp') { const k = CONFIG.healing.maxHpPerPick; player.maxHp += k; player.hp = Math.min(player.maxHp, player.hp + k); }
   if (id === 'glass') { player.maxHp = Math.max(40, player.maxHp - 30); player.hp = Math.min(player.hp, player.maxHp); }
 }
 
@@ -1863,7 +1895,9 @@ const tmpPt = { x: 0, y: 0 };
 function magnetAllOrbs() { for (const o of orbs.items) { o.pulled = true; o.age += 3; } }
 
 const Rounds = {
-  hpMul() { return 1 + CONFIG.rounds.hpPerRound * (Game.round - 1); },
+  hpMul() { const n = Game.round - 1, R = CONFIG.rounds; return 1 + R.hpPerRound * n + R.hpPerRoundSq * n * n; },
+  bossHpMul() { const n = Game.round - 1, B = CONFIG.bosses; return 1 + B.hpPerRound * n + B.hpPerRoundSq * n * n; },
+  dmgMul() { return 1 + CONFIG.rounds.dmgPerRound * (Game.round - 1); },
   speedMul() { return Math.min(CONFIG.rounds.speedMax, 1 + CONFIG.rounds.speedPerRound * (Game.round - 1)); },
 
   // Returns waves: [[ [type, count], ... ], ...]
@@ -1877,7 +1911,11 @@ const Rounds = {
     for (let w = 0; w < waveCount; w++) {
       // each wave focuses on a few types so it has its own character
       const focus = [];
-      while (focus.length < 3) { const t = pickWeighted(roster.map((r) => [r, R.weight[r]])); if (focus.indexOf(t) < 0) focus.push(t); }
+      const ranged = { gunner: 1, watcher: 1, phantom: 1 };
+      while (focus.length < 3) {
+        const t = pickWeighted(roster.map((r) => [r, R.weight[r] * (ranged[r] ? 1 + R.rangedRamp * k : 1)]));
+        if (focus.indexOf(t) < 0) focus.push(t);
+      }
       const groups = Math.min(9, 4 + Math.floor(k / 2) + (w === waveCount - 1 ? 1 : 0));
       const wave = [];
       for (let g = 0; g < groups; g++) {
@@ -2000,6 +2038,21 @@ function screenToWorld(sx, sy, out) {
   return out;
 }
 
+// Gentle aim assist for touch: nudge the aim toward the enemy closest to the aim line.
+function aimAssist(a) {
+  const AA = CONFIG.player.aimAssist;
+  let best = null, bestScore = AA.cone;
+  for (const e of enemies.items) {
+    if (e.dead || e.alpha < 0.5) continue;
+    const dx = e.x - player.x, dy = e.y - player.y, d2 = dx * dx + dy * dy;
+    if (d2 > AA.range * AA.range) continue;
+    const off = Math.abs(angDiff(a, Math.atan2(dy, dx)));
+    if (off < bestScore) { bestScore = off; best = e; }
+  }
+  if (!best) return a;
+  return a + angDiff(a, Math.atan2(best.y - player.y, best.x - player.x)) * AA.strength;
+}
+
 function updatePlayer(dt) {
   const P = CONFIG.player;
   if (player.hp <= 0) return;
@@ -2045,11 +2098,8 @@ function updatePlayer(dt) {
   const aim = Input.aim;
   if (aim.id !== null) {
     firing = true;
-    if (Math.hypot(aim.dx, aim.dy) > 0.25) player.angle = Math.atan2(aim.dy, aim.dx);
-    else {                                 // thumb resting: auto-aim the nearest enemy
-      const t = nearestEnemy(player.x, player.y, 520);
-      if (t) player.angle = Math.atan2(t.y - player.y, t.x - player.x);
-    }
+    // thumb resting: keep firing in the last direction
+    if (Math.hypot(aim.dx, aim.dy) > 0.25) player.angle = aimAssist(Math.atan2(aim.dy, aim.dx));
   } else if (Input.mouse.seen) {
     screenToWorld(Input.mouse.x, Input.mouse.y, tmpPt);
     player.angle = Math.atan2(tmpPt.y - player.y, tmpPt.x - player.x);
@@ -2067,7 +2117,10 @@ function updatePlayer(dt) {
 
   if (player.invuln > 0) player.invuln -= dt;
   if (player.shieldTimer > 0) player.shieldTimer -= dt;
-  if (U('regen') && player.hp < player.maxHp) player.hp = Math.min(player.maxHp, player.hp + 0.6 * U('regen') * dt);
+  player.hitAgo += dt;
+  if (U('regen') && player.hp < player.maxHp && player.hitAgo > CONFIG.healing.regenDelay) {
+    player.hp = Math.min(player.maxHp, player.hp + CONFIG.healing.regenPerLevel * U('regen') * dt);
+  }
 
   // epic: nova pulse
   const nv = U('nova');
@@ -2075,7 +2128,7 @@ function updatePlayer(dt) {
     player.novaTimer -= dt;
     if (player.novaTimer <= 0) {
       player.novaTimer = 5.5 - nv;
-      explodeAt(player.x, player.y, 130 + 40 * nv, playerDamage() * (1.5 + nv), false, '#33f6ff', true);
+      explodeAt(player.x, player.y, 120 + 35 * nv, playerDamage() * (1 + 0.75 * nv), false, '#33f6ff', true);
       ring(player.x, player.y, 60 + 30 * nv, '#ffffff', 0.3, 2);
       Sound.play('dash');
     }
@@ -2089,14 +2142,14 @@ function updatePlayer(dt) {
       dronePos[i].x = player.x + Math.cos(a) * 44; dronePos[i].y = player.y + Math.sin(a) * 44;
     }
     if (player.droneTimer <= 0) {
-      player.droneTimer = 0.45;
+      player.droneTimer = 0.65;
       for (let i = 0; i < nd; i++) {
-        const D = dronePos[i], t = nearestEnemy(D.x, D.y, 480);
+        const D = dronePos[i], t = nearestEnemy(D.x, D.y, 360);
         if (!t) continue;
         const b = pBullets.spawn(); if (!b) break;
         const a = Math.atan2(t.y - D.y, t.x - D.x);
         b.x = D.x; b.y = D.y; b.vx = Math.cos(a) * 800; b.vy = Math.sin(a) * 800;
-        b.life = 0.7; b.dmg = playerDamage() * 0.6; b.pierce = 0; b.bounce = 0; b.r = 4; b.hitList.length = 0;
+        b.life = 0.7; b.dmg = playerDamage() * 0.4; b.pierce = 0; b.bounce = 0; b.r = 4; b.hitList.length = 0;
       }
     }
   }
@@ -2105,7 +2158,7 @@ function updatePlayer(dt) {
   const nb = U('blades');
   if (nb) {
     player.bladeAngle += dt * (3 + 0.45 * nb);
-    const R = 64 + nb * 4, dmg = playerDamage() * 0.8 + 4;
+    const R = 64 + nb * 4, dmg = playerDamage() * 0.55 + 3;
     for (let i = 0; i < nb; i++) {
       const a = player.bladeAngle + (i / nb) * TAU;
       const bx = player.x + Math.cos(a) * R, by = player.y + Math.sin(a) * R;
@@ -2144,7 +2197,7 @@ function hitEnemyWithBullet(b, e) {
 }
 
 function updateBullets(dt) {
-  const A = CONFIG.arena, list = pBullets.items, homing = U('homing') * 5;
+  const A = CONFIG.arena, list = pBullets.items, homing = U('homing') * 2.2;
   for (let i = list.length - 1; i >= 0; i--) {
     const b = list[i];
     b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt;
@@ -2153,11 +2206,11 @@ function updateBullets(dt) {
     if (b.y < 0 || b.y > A.h) { if (b.bounce > 0) { b.bounce--; b.vy = -b.vy; b.y = clamp(b.y, 0, A.h); b.life += 0.35; b.hitList.length = 0; spark(b.x, b.y, '#44ff77', 3, 150, 0.2, 2); } else out = true; }
     if (out || b.life <= 0) { pBullets.removeAt(i); continue; }
     if (homing) {                          // epic: steer toward the nearest enemy
-      grid.query(b.x, b.y, 260, bbuf);
-      let best = Game.boss && !Game.boss.dead && dist2(b.x, b.y, Game.boss.x, Game.boss.y) < 360 * 360 ? Game.boss : null, bd = 1e12;
+      grid.query(b.x, b.y, 190, bbuf);
+      let best = Game.boss && !Game.boss.dead && dist2(b.x, b.y, Game.boss.x, Game.boss.y) < 300 * 300 ? Game.boss : null, bd = 1e12;
       for (let j = 0; j < bbuf.length; j++) {
         const e = bbuf[j]; if (e.dead || e.alpha < 0.5 || b.hitList.indexOf(e) >= 0) continue;
-        const d2 = dist2(b.x, b.y, e.x, e.y); if (d2 < bd && d2 < 260 * 260) { bd = d2; best = e; }
+        const d2 = dist2(b.x, b.y, e.x, e.y); if (d2 < bd && d2 < 190 * 190) { bd = d2; best = e; }
       }
       if (best) {
         const cur = Math.atan2(b.vy, b.vx), want = Math.atan2(best.y - b.y, best.x - b.x);
@@ -2297,6 +2350,18 @@ function update(dt0) {
   if (Game.slowmoTimer > 0) Game.slowmoTimer -= dt0;
   if (Game.bannerTimer > 0) Game.bannerTimer -= dt0;
   if (Game.introTimer > 0) Game.introTimer -= dt0;
+  // damage "ghost" on the health bar drains after a short delay
+  if (player.hpGhost < player.hp) player.hpGhost = player.hp;
+  else if (player.hpGhost > player.hp) {
+    if ((player.ghostDelay -= dt0) <= 0) player.hpGhost = Math.max(player.hp, player.hpGhost - player.maxHp * 0.5 * dt0);
+  }
+  // fear of dying: heartbeat + muffled music at low HP
+  const low = player.hp > 0 && player.hp / player.maxHp < CONFIG.player.lowHp;
+  Sound.muffle(low);
+  if (low) {
+    Game.heartTimer -= dt0;
+    if (Game.heartTimer <= 0) { Sound.play('heartbeat'); Game.heartTimer = 0.5 + 0.7 * (player.hp / player.maxHp) / CONFIG.player.lowHp; }
+  } else Game.heartTimer = 0;
 
   let scale = 1;
   if (Game.slowmoTimer > 0) scale = CONFIG.slowmo.scale;
@@ -2393,6 +2458,13 @@ function render(rdt) {
   if (Game.flash > 0) {
     ctx.globalAlpha = Math.min(0.45, Game.flash); ctx.fillStyle = Game.flashColor;
     ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.globalAlpha = 1;
+  }
+  if (showWorld && player.hp > 0 && player.hp / player.maxHp < CONFIG.player.lowHp) {
+    const k = 1 - (player.hp / player.maxHp) / CONFIG.player.lowHp;           // 0..1, stronger when lower
+    const beat = Math.pow(Math.max(0, Math.sin(Game.realTime * 9)), 3);
+    const g = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.height * 0.35, canvas.width / 2, canvas.height / 2, canvas.width * 0.65);
+    g.addColorStop(0, 'rgba(255,0,40,0)'); g.addColorStop(1, 'rgba(255,0,40,' + (0.18 + 0.22 * k + 0.12 * beat) + ')');
+    ctx.fillStyle = g; ctx.fillRect(0, 0, canvas.width, canvas.height);
   }
   if (Game.slowmoTimer > 0) {
     const g = ctx.createRadialGradient(canvas.width / 2, canvas.height / 2, canvas.height * 0.3, canvas.width / 2, canvas.height / 2, canvas.width * 0.7);
@@ -2815,15 +2887,26 @@ function drawHUD(W, H) {
   const L = 12 + View.safe.l, R = W - 12 - View.safe.r, T = 10 + View.safe.t;
   const compact = H < 420;
   // health
-  const hw = compact ? 150 : 190;
-  const hpK = player.hp / player.maxHp;
-  drawBar(L, T, hw, 12, hpK, hpK < 0.3 ? (((Game.realTime * 6) | 0) % 2 ? '#ff3355' : '#ff8a9a') : '#ff3d6e');
-  glowText(Math.ceil(player.hp) + '/' + player.maxHp, L + 4, T + 24, '#ffd0dc', 12);
-  glowText(fmtTime(Game.time), L + 4, T + 42, '#8fb8c8', 11);
-  if (player.shieldTimer > 0) glowText('SHIELD', L + hw - 2, T + 24, '#4dc3ff', 11, 'right');
+  // big health bar: ticks every 10 HP, a white "ghost" shows the damage you just took
+  const hw = compact ? 210 : 270, hh = compact ? 18 : 20;
+  const hpK = clamp(player.hp / player.maxHp, 0, 1), ghostK = clamp(player.hpGhost / player.maxHp, 0, 1);
+  const low = hpK < CONFIG.player.lowHp && player.hp > 0;
+  const beat = low ? Math.max(0, Math.sin(Game.realTime * 9)) : 0;
+  ctx.fillStyle = 'rgba(255,255,255,0.07)'; ctx.fillRect(L, T, hw, hh);
+  ctx.fillStyle = 'rgba(255,170,190,0.55)'; ctx.fillRect(L + hw * hpK, T, hw * (ghostK - hpK), hh);
+  const grd = ctx.createLinearGradient(L, T, L, T + hh);
+  grd.addColorStop(0, low ? '#ff6a7a' : '#ff6f93'); grd.addColorStop(1, low ? '#c0001c' : '#d8124a');
+  ctx.fillStyle = grd; ctx.fillRect(L, T, hw * hpK, hh);
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+  for (let v = 10; v < player.maxHp; v += 10) ctx.fillRect(L + hw * (v / player.maxHp), T + hh * 0.55, 1, hh * 0.45);
+  ctx.strokeStyle = low ? 'rgba(255,60,80,' + (0.6 + 0.4 * beat) + ')' : 'rgba(255,255,255,0.5)';
+  ctx.lineWidth = low ? 2 + beat * 2 : 1.5; ctx.strokeRect(L + 0.5, T + 0.5, hw - 1, hh - 1);
+  glowText(Math.ceil(player.hp) + ' / ' + player.maxHp, L + hw / 2, T + hh / 2 + 1, '#ffffff', compact ? 12 : 13, 'center');
+  glowText(fmtTime(Game.time), L + 2, T + hh + 14, '#8fb8c8', 11);
+  if (player.shieldTimer > 0) glowText('SHIELD', L + hw - 2, T + hh + 14, '#4dc3ff', 11, 'right');
 
   // xp bar + level (top center)
-  const xw = Math.min(W * 0.36, 360), xx = W / 2 - xw / 2;
+  const xw = Math.min(W * 0.3, 340), xx = W / 2 - xw / 2;
   drawBar(xx, T, xw, 7, Game.xp / Game.xpNeed, '#5dffb0');
   glowText('LV ' + Game.level, xx - 8, T + 3.5, '#5dffb0', 13, 'right');
   if (Game.picks > 0) {
@@ -3049,7 +3132,7 @@ function resetRun() {
     x: A.w / 2, y: A.h / 2, vx: 0, vy: 0, angle: -Math.PI / 2, hp: P.maxHp, maxHp: P.maxHp,
     invuln: 1, fireTimer: 0, dashCd: 0, dashTimer: 0, dashDx: 1, dashDy: 0, dashSpeed: 0,
     shieldTimer: 0, lastMoveX: 1, lastMoveY: 0, firing: false, bladeAngle: 0, up: {},
-    novaTimer: 3, droneTimer: 0, revived: false,
+    novaTimer: 3, droneTimer: 0, revived: false, hitAgo: 99, hpGhost: P.maxHp, ghostDelay: 0,
   });
   Object.assign(Game, {
     time: 0, timeScale: 1, slowmoTimer: 0, slowmoCd: 0, deathTimer: 0,
@@ -3057,11 +3140,12 @@ function resetRun() {
     level: 1, xp: 0, xpNeed: CONFIG.xp.need(1), picks: 0, rerolls: CONFIG.rounds.rerollsStart,
     round: 0, wave: 0, waves: null, phase: 'intro', phaseTimer: 0, queue: [], groupTimer: 0,
     roundKills: 0, roundStart: 0, bossesKilled: 0, boss: null, seen: {}, intro: null, introTimer: 0,
-    shake: 0, hitFlash: 0, flash: 0, borderColor: ROUND_COLORS[0], banner: '', bannerTimer: 0,
+    shake: 0, hitFlash: 0, flash: 0, hitStop: 0, heartTimer: 0, borderColor: ROUND_COLORS[0], banner: '', bannerTimer: 0,
     xpStreak: 0, xpStreakTimer: 0,
   });
   cam.x = player.x; cam.y = player.y;
   Sound.music.boss = false;
+  Sound.muffle(false);
 }
 
 function startGame() {
@@ -3158,7 +3242,9 @@ function frame(now) {
   lastT = now;
   if (!(rdt > 0)) rdt = 0;
   if (rdt > 0.25) rdt = 0.25;
-  if (Game.state === 'play') {
+  if (Game.state === 'play' && Game.hitStop > 0) {
+    Game.hitStop -= rdt;                   // freeze-frame on a hit: everything holds for a moment
+  } else if (Game.state === 'play') {
     const dt = Math.min(rdt, CONFIG.maxDt);
     // two sub-steps on slow frames so fast bullets can't tunnel through small enemies
     if (dt > 1 / 45) { update(dt / 2); if (Game.state === 'play') update(dt / 2); }

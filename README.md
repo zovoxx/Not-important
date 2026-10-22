@@ -31,7 +31,7 @@ After you change `index.html`, the next visit loads the cached copy and fetches 
 - Each **round** has 3–5 **waves**. Enemies arrive in groups. Kill all of them to clear the wave.
 - Level-ups bank **upgrade picks**, which you spend between waves.
 - Every round ends with a **boss** (Spiral Core → Ring Warden → The Summoner, then they come back tougher).
-- After each boss: 30% HP repaired, a **boss reward** (strong epic upgrade, some with a cost), a bonus pick, and +1 reroll.
+- After each boss: 20% HP repaired, a **boss reward** (strong epic upgrade, some with a cost), a bonus pick, and +1 reroll.
 
 ## Play
 
