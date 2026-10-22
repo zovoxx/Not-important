@@ -24,14 +24,14 @@ Alternatively, drag the repository folder into **Pages → Upload assets** (Dire
 | `_headers` | Cloudflare Pages response headers (no-cache for `sw.js`, manifest type) |
 | `_redirects` | Old `/neon-surge.html` link → `/` |
 
-After you change `index.html`, the next visit loads the cached copy and fetches the new version in the background; the update appears on the launch after that. To force everyone onto a new version immediately, bump `CACHE` in `sw.js` (e.g. `neon-surge-v2`).
+The page is network-first: when online you always get the newest `index.html`; offline the cached copy is used. Bump `CACHE` in `sw.js` only when icons or the manifest change.
 
 ## How a run works
 
 - Each **round** has 3–5 **waves**. Enemies arrive in groups. Kill all of them to clear the wave.
-- Level-ups bank **upgrade picks**, which you spend between waves.
+- Level-ups bank **upgrade picks** (shown as `+N UP` next to the XP bar). You spend them all at the end of the round, so fights are never interrupted.
 - Every round ends with a **boss** (Spiral Core → Ring Warden → The Summoner, then they come back tougher).
-- After each boss: 20% HP repaired, a **boss reward** (strong epic upgrade, some with a cost), a bonus pick, and +1 reroll.
+- After each boss: 25% HP repaired, a **boss reward** (strong epic upgrade, some with a cost), a bonus pick, and +1 reroll.
 
 ## Play
 
@@ -44,4 +44,9 @@ After you change `index.html`, the next visit loads the cached copy and fetches 
 
 All balance numbers are in the `CONFIG` object at the top of the script in `index.html`:
 `CONFIG.rounds` (wave plans, group timing, scaling, heal, rerolls), `CONFIG.enemies` (each enemy's stats), `CONFIG.bosses`, `CONFIG.xp`, `CONFIG.caps`.
-Upgrade effects are in `UPGRADES` (normal) and `EPICS` (boss rewards).
+Upgrade strength is in `CONFIG.upgrades` (stacks add up, they don't multiply) and caps in `CONFIG.caps`.
+Upgrade cards are in `UPGRADES` (normal) and `EPICS` (boss rewards).
+
+Enemies adapt to your build: their HP scales with the round **and** with your firepower raised to
+`CONFIG.rounds.powerExponent` (0 = upgrades are pure gain, 1 = fully cancelled; default 0.5).
+Raise it to make strong builds less dominant, lower it to make upgrades feel stronger.

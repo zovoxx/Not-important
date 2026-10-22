@@ -240,9 +240,9 @@ const CONFIG = {
     maxHpPerPick: 15,
   },
 
-  // Every level-up banks one upgrade pick. Picks are spent when a wave is cleared.
+  // Every level-up banks one upgrade pick. All picks are spent at the end of the round.
   xp: {
-    need: (L) => Math.round(20 + (L - 1) * 9),   // xp needed for the pick after level L
+    need: (L) => Math.round(20 + (L - 1) * 10 + Math.pow(L - 1, 1.4) * 1.2),   // xp needed for the pick after level L
     orbCap: 300,
     orbSpeed: 620,
   },
@@ -266,14 +266,20 @@ const CONFIG = {
     countdown: 1.6,                  // "WAVE N" banner before the next wave
     bossWarning: 3,
     clearDelay: 1.8,                 // after the boss dies, before the round-end screen
-    healOnClear: 0.2,                // fraction of max HP repaired after each round
+    healOnClear: 0.25,               // fraction of max HP repaired after each round
     bonusPicks: 1,                   // extra normal picks at every round end (plus the boss reward)
     rerollsStart: 1,                 // rerolls at the start of a run
     rerollsPerRound: 1,              // rerolls gained per round cleared
     groupDelay: 1.25,                // seconds between groups inside a wave
     maxAlive: (r) => Math.min(34, 12 + r * 3),   // groups wait while this many enemies are alive
-    hpPerRound: 0.32,                // enemy hp +32% per round...
-    hpPerRoundSq: 0.06,              // ...plus a growing extra, so late rounds keep up with strong builds
+    hpPerRound: 0.2,                 // enemy hp +20% per round...
+    hpPerRoundSq: 0.03,              // ...plus a growing extra
+    // Adaptive: enemy + boss hp also scale with your build's firepower (power ^ exponent).
+    // 0 = upgrades are pure gain, 1 = upgrades are fully cancelled. 0.5 keeps upgrades rewarding
+    // while every round still ends up harder than the power you gained.
+    powerExponent: 0.5,
+    // how much area/utility upgrades count toward "power" per level
+    powerWeights: { pierce: 0.1, chain: 0.08, explosive: 0.12, blades: 0.1, nova: 0.12, drones: 0.15, homing: 0.1, bounce: 0.05 },
     dmgPerRound: 0.06,               // enemy damage +6% per round
     speedPerRound: 0.04, speedMax: 1.35,
     // Hand-made first rounds: each introduces new enemies. After these, rounds are generated.
@@ -289,9 +295,9 @@ const CONFIG = {
         [['gunner', 4], ['blob', 3], ['charger', 3], ['grunt', 9], ['mite', 9]],
       ],
       [ // round 3 — Watchers, Fuses
-        [['watcher', 4], ['grunt', 8], ['mite', 9], ['gunner', 3]],
+        [['watcher', 3], ['grunt', 8], ['mite', 9], ['gunner', 2]],
         [['fuse', 3], ['grunt', 8], ['fuse', 3], ['blob', 3], ['charger', 3]],
-        [['watcher', 4], ['fuse', 4], ['gunner', 4], ['grunt', 9], ['blob', 3]],
+        [['watcher', 3], ['fuse', 3], ['gunner', 3], ['grunt', 8], ['blob', 2]],
       ],
       [ // round 4 — Wardens, Phantoms
         [['warden', 3], ['grunt', 9], ['gunner', 4], ['mite', 12]],
@@ -329,22 +335,38 @@ const CONFIG = {
 
   bosses: {
     order: ['spiral', 'ring', 'summoner'],
-    hpPerRound: 0.5,                 // +50% boss hp per round...
-    hpPerRoundSq: 0.08,              // ...plus a growing extra
+    hpPerRound: 0.35,                // +35% boss hp per round...
+    hpPerRoundSq: 0.04,              // ...plus a growing extra (and the same build scaling as enemies)
     xpDrop: 50,
-    spiral:   { name: 'SPIRAL CORE', hp: 1100, speed: 70, r: 62, dmg: 30, color: '#ff3df2', score: 2500, fireEvery: 0.1, arms: 4, spin: 1.9, bulletSpeed: 230, bulletDmg: 12 },
-    ring:     { name: 'RING WARDEN', hp: 1300, speed: 85, r: 58, dmg: 30, color: '#33f6ff', score: 2800, ringEvery: 2.4, ringCount: 34, gapSize: 5, bulletSpeed: 170, bulletDmg: 12 },
-    summoner: { name: 'THE SUMMONER', hp: 1400, speed: 110, r: 56, dmg: 30, color: '#ffe23a', score: 3000, summonEvery: 4, summonCount: 5, fireEvery: 1.6, bulletSpeed: 240, bulletDmg: 12 },
+    spiral:   { name: 'SPIRAL CORE', hp: 700, speed: 70, r: 62, dmg: 24, color: '#ff3df2', score: 2500, fireEvery: 0.1, arms: 4, spin: 1.9, bulletSpeed: 210, bulletDmg: 12 },
+    ring:     { name: 'RING WARDEN', hp: 900, speed: 85, r: 58, dmg: 24, color: '#33f6ff', score: 2800, ringEvery: 2.4, ringCount: 34, gapSize: 7, bulletSpeed: 170, bulletDmg: 12 },
+    summoner: { name: 'THE SUMMONER', hp: 700, speed: 110, r: 56, dmg: 24, color: '#ffe23a', score: 3000, summonEvery: 5, summonCount: 4, maxMinions: 10, fireEvery: 1.6, bulletSpeed: 240, bulletDmg: 12 },
   },
 
   enemyBullet: { radius: 7, life: 6 },
 
   // upgrade caps (max stacks). Effects are in the UPGRADES section.
   caps: {
-    multishot: 4, pierce: 3, bounce: 2, rapid: 6, heavy: 6, blades: 5, chain: 3,
-    explosive: 3, dash: 3, slowmo: 1, magnet: 4, regen: 3, maxhp: 5, speed: 4,
+    multishot: 2, pierce: 2, bounce: 1, rapid: 4, heavy: 4, blades: 3, chain: 2,
+    explosive: 2, dash: 3, slowmo: 1, magnet: 3, regen: 3, maxhp: 4, speed: 3,
     // boss-reward (epic) upgrades
-    glass: 1, overdrive: 2, secondwind: 1, nova: 3, homing: 2, drones: 2, vampire: 2,
+    glass: 1, overdrive: 1, secondwind: 1, nova: 2, homing: 1, drones: 1, vampire: 1,
+  },
+
+  // Upgrade strength. Stacks ADD up instead of multiplying, so builds stay in a sane range.
+  upgrades: {
+    multishotDmg: [1, 0.65, 0.5],    // damage of EACH bullet with 1 / 2 / 3 bullets (spread = coverage, not 3x dps)
+    rapidPerLevel: 0.12,             // +fire rate
+    heavyPerLevel: 0.15,             // +damage
+    pierceKeep: 0.6,                 // damage kept after passing through an enemy
+    chainChance: 0.25, chainDmg: 0.5,
+    explosiveDmg: 0.4, explosiveRadius: [0, 60, 80],   // death blasts never chain into more blasts
+    bladesDmg: 0.4,
+    speedPerLevel: 0.06,
+    glassDmg: 0.35, glassHp: 25,
+    overdriveFire: 0.2, overdriveSpeed: 0.08,
+    novaDmg: [0, 1.2, 1.8], novaEvery: [0, 5, 4],
+    droneDmg: 0.4,
   },
 
   slowmo: { threshold: 0.3, duration: 2, scale: 0.35, cooldown: 30 },
@@ -1162,8 +1184,9 @@ function banner(text, time) { Game.banner = text; Game.bannerTimer = time || 2; 
    ===================================================================== */
 const U = (k) => player.up[k] || 0;       // current upgrade level
 
-function playerDamage() { return CONFIG.player.bulletDamage * (1 + 0.25 * U('heavy')) * (U('glass') ? 1.6 : 1); }
-function playerFireRate() { return CONFIG.player.fireRate * Math.pow(1.16, U('rapid')) * Math.pow(1.3, U('overdrive')); }
+const UP = CONFIG.upgrades;
+function playerDamage() { return CONFIG.player.bulletDamage * (1 + UP.heavyPerLevel * U('heavy') + UP.glassDmg * U('glass')); }
+function playerFireRate() { return CONFIG.player.fireRate * (1 + UP.rapidPerLevel * U('rapid') + UP.overdriveFire * U('overdrive')); }
 
 function nearestEnemy(x, y, maxD) {
   let best = null, bd = maxD * maxD;
@@ -1180,7 +1203,7 @@ function firePlayer() {
   const P = CONFIG.player;
   const n = 1 + U('multishot');
   const spread = P.spread * (n > 3 ? 0.85 : 1);
-  const dmg = playerDamage();
+  const dmg = playerDamage() * UP.multishotDmg[Math.min(n - 1, UP.multishotDmg.length - 1)];
   const tipX = player.x + Math.cos(player.angle) * 16, tipY = player.y + Math.sin(player.angle) * 16;
   for (let i = 0; i < n; i++) {
     const b = pBullets.spawn(); if (!b) break;
@@ -1231,6 +1254,7 @@ function damageEnemy(e, dmg, fromX, fromY, opts) {
   return false;
 }
 
+let blastDepth = 0;
 function killEnemy(e) {
   if (e.dead) return;
   e.dead = true;
@@ -1273,9 +1297,10 @@ function killEnemy(e) {
 
   // Explosive Kills upgrade
   const ex = U('explosive');
-  if (ex > 0) {
-    const r = 55 + 18 * ex;
-    explodeAt(e.x, e.y, r, 6 + playerDamage() * (0.45 + 0.3 * ex), false, '#ff9a3d', true);
+  if (ex > 0 && blastDepth === 0) {          // blasts can kill, but those kills don't blast again
+    blastDepth++;
+    explodeAt(e.x, e.y, UP.explosiveRadius[ex], playerDamage() * UP.explosiveDmg, false, '#ff9a3d', true);
+    blastDepth--;
   }
 }
 
@@ -1301,7 +1326,7 @@ function explodeAt(x, y, r, dmg, hurtPlayer, color, quietSmall) {
 }
 
 function chainLightning(src, dmg) {
-  let jumps = U('chain') + 1, cur = src;
+  let jumps = U('chain'), cur = src;
   const hitSet = [src];
   while (jumps-- > 0) {
     grid.query(cur.x, cur.y, 170, qbuf);
@@ -1577,7 +1602,7 @@ function updateEnemy(e, dt) {
         e.aimX = px + player.vx * tt; e.aimY = py + player.vy * tt;
         e.angle += angDiff(e.angle, Math.atan2(e.aimY - e.y, e.aimX - e.x)) * Math.min(1, dt * 12);
         if (e.timer <= 0) {
-          const n = Game.round >= 3 ? 3 : 1;
+          const n = Game.round >= 4 ? 3 : 1;   // triple shot from round 4
           const mx = e.x + Math.cos(e.angle) * e.r * 1.4, my = e.y + Math.sin(e.angle) * e.r * 1.4;
           for (let i = 0; i < n; i++) spawnEnemyBullet(mx, my, e.angle + (i - (n - 1) / 2) * 0.2, d.bulletSpeed, d.bulletDmg);
           e.vx -= Math.cos(e.angle) * 120; e.vy -= Math.sin(e.angle) * 120;      // recoil
@@ -1754,7 +1779,7 @@ function updateBoss(e, dt, dist, toA) {
     if (e.timer <= 0) {
       e.timer = d.summonEvery * (phase2 ? 0.75 : 1);
       const alive = enemies.count - 1;
-      const n = Math.min(d.summonCount + (phase2 ? 2 : 0) + lap * 2, Math.max(0, 16 - alive));
+      const n = Math.min(d.summonCount + (phase2 ? 2 : 0) + lap * 2, Math.max(0, d.maxMinions - alive));
       for (let i = 0; i < n; i++) {
         const a = (i / Math.max(1, n)) * TAU + e.rot;
         const kind = Math.random() < 0.3 ? 'charger' : Math.random() < 0.3 && Game.round > 2 ? 'gunner' : 'grunt';
@@ -1766,8 +1791,8 @@ function updateBoss(e, dt, dist, toA) {
     e.t3 -= dt;
     if (e.t3 <= 0) {
       e.t3 = d.fireEvery * (phase2 ? 0.7 : 1);
-      const n = phase2 ? 5 : 3;
-      for (let i = 0; i < n; i++) spawnEnemyBullet(e.x, e.y, toA + (i - (n - 1) / 2) * 0.18, d.bulletSpeed, d.bulletDmg);
+      const n = phase2 ? 4 : 3;
+      for (let i = 0; i < n; i++) spawnEnemyBullet(e.x, e.y, toA + (i - (n - 1) / 2) * 0.2, d.bulletSpeed, d.bulletDmg);
       Sound.play('enemyShoot');
     }
   }
@@ -1797,31 +1822,32 @@ function onBossKilled(e) {
    11. UPGRADES
    ===================================================================== */
 // name/desc receive the CURRENT level (0 = not owned yet) and describe the next stack.
+const UPG = () => CONFIG.upgrades;
 const UPGRADES = [
-  { id: 'multishot', color: '#33f6ff', name: (l) => ['Double Shot', 'Triple Spread', 'Quad Spread', 'Wide Spread'][l] || 'Wide Spread',
-    desc: (l) => `Fire ${l + 2} bullets per shot` },
-  { id: 'pierce', color: '#9ffcff', name: () => 'Piercing Bullets', desc: (l) => `Bullets pass through ${l + 1} more ${l ? 'enemies' : 'enemy'}` },
-  { id: 'bounce', color: '#44ff77', name: () => 'Bouncing Bullets', desc: (l) => `Bullets bounce off arena walls (${l + 1}x) and fly longer` },
-  { id: 'rapid', color: '#ffe23a', name: () => 'Rapid Fire', desc: () => '+16% fire rate' },
-  { id: 'heavy', color: '#ff3355', name: () => 'Heavy Rounds', desc: () => '+25% bullet damage, bigger bullets' },
-  { id: 'blades', color: '#9ffcff', name: () => 'Orbiting Blades', desc: (l) => l ? '+1 blade, faster spin' : 'A blade spins around you, slicing enemies' },
-  { id: 'chain', color: '#7aa8ff', name: () => 'Chain Lightning', desc: (l) => `Hits have a 35% chance to arc to ${l + 1} nearby ${l ? 'enemies' : 'enemy'}` },
-  { id: 'explosive', color: '#ff8a1f', name: () => 'Explosive Kills', desc: (l) => l ? 'Bigger, stronger death blasts' : 'Enemies explode on death, hurting neighbors' },
+  { id: 'multishot', color: '#33f6ff', name: (l) => ['Double Shot', 'Triple Spread'][l] || 'Triple Spread',
+    desc: (l) => `Fire ${l + 2} bullets in a spread, ${Math.round(UPG().multishotDmg[l + 1] * 100)}% damage each` },
+  { id: 'pierce', color: '#9ffcff', name: () => 'Piercing Bullets', desc: (l) => `Bullets pass through ${l + 1} more ${l ? 'enemies' : 'enemy'} (${Math.round(UPG().pierceKeep * 100)}% damage after each)` },
+  { id: 'bounce', color: '#44ff77', name: () => 'Bouncing Bullets', desc: () => 'Bullets bounce off arena walls once and fly longer' },
+  { id: 'rapid', color: '#ffe23a', name: () => 'Rapid Fire', desc: () => `+${Math.round(UPG().rapidPerLevel * 100)}% fire rate` },
+  { id: 'heavy', color: '#ff3355', name: () => 'Heavy Rounds', desc: () => `+${Math.round(UPG().heavyPerLevel * 100)}% bullet damage, bigger bullets` },
+  { id: 'blades', color: '#9ffcff', name: () => 'Orbiting Blades', desc: (l) => l ? '+1 blade, faster spin' : 'A blade spins around you, slicing enemies and blocking shots' },
+  { id: 'chain', color: '#7aa8ff', name: () => 'Chain Lightning', desc: (l) => `${Math.round(UPG().chainChance * 100)}% chance a hit arcs to ${l + 1} nearby ${l ? 'enemies' : 'enemy'} (${Math.round(UPG().chainDmg * 100)}% damage)` },
+  { id: 'explosive', color: '#ff8a1f', name: () => 'Explosive Kills', desc: (l) => l ? 'Bigger death blasts' : `Enemies burst on death (${Math.round(UPG().explosiveDmg * 100)}% damage to neighbors)` },
   { id: 'dash', color: '#33f6ff', name: () => 'Dash Upgrade', desc: () => '-25% dash cooldown, +20% dash distance' },
   { id: 'slowmo', color: '#b455ff', name: () => 'Slow-Mo Reflex', desc: () => 'Below 30% HP time slows for 2s (30s cooldown)' },
   { id: 'magnet', color: '#5dffb0', name: () => 'Magnet', desc: () => '+45% XP pickup radius' },
   { id: 'regen', color: '#ff4d7a', name: () => 'Regeneration', desc: (l) => `After ${CONFIG.healing.regenDelay}s without getting hit, heal ${((l + 1) * CONFIG.healing.regenPerLevel).toFixed(1)} HP/s` },
   { id: 'maxhp', color: '#ff4d7a', name: () => 'Max Health Up', desc: () => `+${CONFIG.healing.maxHpPerPick} max HP and heal ${CONFIG.healing.maxHpPerPick}` },
-  { id: 'speed', color: '#ffe23a', name: () => 'Speed Up', desc: () => '+8% move speed' },
+  { id: 'speed', color: '#ffe23a', name: () => 'Speed Up', desc: () => `+${Math.round(UPG().speedPerLevel * 100)}% move speed` },
 ];
 // Boss rewards: one of these is offered after every boss. Strong, some with a price.
 const EPICS = [
-  { id: 'glass', color: '#ff3355', name: () => 'Glass Cannon', desc: () => '+60% damage, but -30 max HP' },
-  { id: 'overdrive', color: '#ffe23a', name: () => 'Overdrive', desc: () => '+30% fire rate and +12% move speed' },
+  { id: 'glass', color: '#ff3355', name: () => 'Glass Cannon', desc: () => `+${Math.round(UPG().glassDmg * 100)}% damage, but -${UPG().glassHp} max HP` },
+  { id: 'overdrive', color: '#ffe23a', name: () => 'Overdrive', desc: () => `+${Math.round(UPG().overdriveFire * 100)}% fire rate and +${Math.round(UPG().overdriveSpeed * 100)}% move speed` },
   { id: 'secondwind', color: '#ffffff', name: () => 'Second Wind', desc: () => 'Once per run, survive a fatal hit with ' + Math.round(CONFIG.healing.secondWindHp * 100) + '% HP and a blast' },
-  { id: 'nova', color: '#33f6ff', name: () => 'Nova Pulse', desc: (l) => l ? 'Bigger, stronger, more frequent pulses' : 'Every 5s a shockwave blasts enemies around you' },
-  { id: 'homing', color: '#ff3df2', name: () => 'Homing Rounds', desc: (l) => l ? 'Bullets turn harder' : 'Your bullets curve gently toward nearby enemies' },
-  { id: 'drones', color: '#9ffcff', name: () => 'Attack Drone', desc: (l) => l ? 'A second drone joins you' : 'A drone follows you and shoots enemies' },
+  { id: 'nova', color: '#33f6ff', name: () => 'Nova Pulse', desc: (l) => l ? 'Bigger, stronger, more frequent pulses' : `Every ${UPG().novaEvery[1]}s a shockwave blasts enemies around you` },
+  { id: 'homing', color: '#ff3df2', name: () => 'Homing Rounds', desc: () => 'Your bullets curve gently toward nearby enemies' },
+  { id: 'drones', color: '#9ffcff', name: () => 'Attack Drone', desc: () => 'A drone follows you and shoots nearby enemies' },
   { id: 'vampire', color: '#ff4d7a', name: () => 'Vampire', desc: (l) => `Every kill heals ${(CONFIG.healing.vampirePerLevel * (l + 1)).toFixed(1)} HP` },
 ];
 EPICS.forEach((u) => { u.epic = true; });
@@ -1833,7 +1859,7 @@ function applyUpgrade(id) {
   }
   player.up[id] = (player.up[id] || 0) + 1;
   if (id === 'maxhp') { const k = CONFIG.healing.maxHpPerPick; player.maxHp += k; player.hp = Math.min(player.maxHp, player.hp + k); }
-  if (id === 'glass') { player.maxHp = Math.max(40, player.maxHp - 30); player.hp = Math.min(player.hp, player.maxHp); }
+  if (id === 'glass') { player.maxHp = Math.max(40, player.maxHp - UPG().glassHp); player.hp = Math.min(player.hp, player.maxHp); }
 }
 
 function rollUpgradeChoices(epic) {
@@ -1887,7 +1913,7 @@ function drawUpgradeIcon(g, id, color, s) {
 }
 
 /* =====================================================================
-   12. ROUNDS — waves of enemy groups, a boss at the end, upgrades between
+   12. ROUNDS — waves of enemy groups, a boss at the end, upgrades after the boss
    ===================================================================== */
 const ROUND_COLORS = ['#33f6ff', '#ff3df2', '#44ff77', '#ff8a1f'];
 const tmpPt = { x: 0, y: 0 };
@@ -1895,8 +1921,19 @@ const tmpPt = { x: 0, y: 0 };
 function magnetAllOrbs() { for (const o of orbs.items) { o.pulled = true; o.age += 3; } }
 
 const Rounds = {
-  hpMul() { const n = Game.round - 1, R = CONFIG.rounds; return 1 + R.hpPerRound * n + R.hpPerRoundSq * n * n; },
-  bossHpMul() { const n = Game.round - 1, B = CONFIG.bosses; return 1 + B.hpPerRound * n + B.hpPerRoundSq * n * n; },
+  // Rough firepower of the current build compared with the starting gun (1.0).
+  playerPower() {
+    const W = CONFIG.rounds.powerWeights, UPc = CONFIG.upgrades;
+    const n = 1 + U('multishot');
+    const dps = (playerDamage() / CONFIG.player.bulletDamage) * (playerFireRate() / CONFIG.player.fireRate) * n * UPc.multishotDmg[n - 1];
+    let area = 1;
+    for (const k in W) area += W[k] * U(k);
+    return dps * area;
+  },
+  // Enemies scale with the round AND with your build, so every round pushes back harder.
+  powerMul() { return Math.pow(Math.max(1, this.playerPower()), CONFIG.rounds.powerExponent); },
+  hpMul() { const n = Game.round - 1, R = CONFIG.rounds; return (1 + R.hpPerRound * n + R.hpPerRoundSq * n * n) * this.powerMul(); },
+  bossHpMul() { const n = Game.round - 1, B = CONFIG.bosses; return (1 + B.hpPerRound * n + B.hpPerRoundSq * n * n) * this.powerMul(); },
   dmgMul() { return 1 + CONFIG.rounds.dmgPerRound * (Game.round - 1); },
   speedMul() { return Math.min(CONFIG.rounds.speedMax, 1 + CONFIG.rounds.speedPerRound * (Game.round - 1)); },
 
@@ -1969,12 +2006,12 @@ const Rounds = {
         if (!Game.queue.length && alive === 0) this.waveCleared();
         break;
       }
-      case 'collect':                         // wait for orbs to fly in (max ~3s), then spend picks
+      case 'collect':                         // wait for orbs to fly in (max ~3s); picks stay banked for the round end
         Game.phaseTimer -= dt;
         if (Game.phaseTimer <= 0 && (orbs.count === 0 || Game.phaseTimer < -2.5)) {
           for (const o of orbs.items) gainXp(o.value, true);
           orbs.clear();
-          if (Game.picks > 0) UI.openPicks('wave'); else this.countdown();
+          this.countdown();
         }
         break;
       case 'countdown':
@@ -2077,7 +2114,7 @@ function updatePlayer(dt) {
       ring(player.x, player.y, 40, '#9ffcff', 0.2, 3);
     }
   }
-  const speed = P.speed * (1 + 0.08 * U('speed') + 0.12 * U('overdrive'));
+  const speed = P.speed * (1 + UP.speedPerLevel * U('speed') + UP.overdriveSpeed * U('overdrive'));
   if (player.dashTimer > 0) {
     player.dashTimer -= dt;
     player.vx = player.dashDx * player.dashSpeed; player.vy = player.dashDy * player.dashSpeed;
@@ -2127,8 +2164,8 @@ function updatePlayer(dt) {
   if (nv) {
     player.novaTimer -= dt;
     if (player.novaTimer <= 0) {
-      player.novaTimer = 5.5 - nv;
-      explodeAt(player.x, player.y, 120 + 35 * nv, playerDamage() * (1 + 0.75 * nv), false, '#33f6ff', true);
+      player.novaTimer = UP.novaEvery[nv];
+      explodeAt(player.x, player.y, 120 + 30 * nv, playerDamage() * UP.novaDmg[nv], false, '#33f6ff', true);
       ring(player.x, player.y, 60 + 30 * nv, '#ffffff', 0.3, 2);
       Sound.play('dash');
     }
@@ -2149,7 +2186,7 @@ function updatePlayer(dt) {
         const b = pBullets.spawn(); if (!b) break;
         const a = Math.atan2(t.y - D.y, t.x - D.x);
         b.x = D.x; b.y = D.y; b.vx = Math.cos(a) * 800; b.vy = Math.sin(a) * 800;
-        b.life = 0.7; b.dmg = playerDamage() * 0.4; b.pierce = 0; b.bounce = 0; b.r = 4; b.hitList.length = 0;
+        b.life = 0.7; b.dmg = playerDamage() * UP.droneDmg; b.pierce = 0; b.bounce = 0; b.r = 4; b.hitList.length = 0;
       }
     }
   }
@@ -2158,7 +2195,7 @@ function updatePlayer(dt) {
   const nb = U('blades');
   if (nb) {
     player.bladeAngle += dt * (3 + 0.45 * nb);
-    const R = 64 + nb * 4, dmg = playerDamage() * 0.55 + 3;
+    const R = 64 + nb * 4, dmg = playerDamage() * UP.bladesDmg + 2;
     for (let i = 0; i < nb; i++) {
       const a = player.bladeAngle + (i / nb) * TAU;
       const bx = player.x + Math.cos(a) * R, by = player.y + Math.sin(a) * R;
@@ -2193,7 +2230,7 @@ function hitEnemyWithBullet(b, e) {
     const sp = Math.hypot(b.vx, b.vy) || 1;
     e.x += (b.vx / sp) * 4; e.y += (b.vy / sp) * 4;
   }
-  if (U('chain') && Math.random() < 0.35) chainLightning(e, b.dmg * 0.6);
+  if (U('chain') && Math.random() < UP.chainChance) chainLightning(e, b.dmg * UP.chainDmg);
 }
 
 function updateBullets(dt) {
@@ -2226,14 +2263,14 @@ function updateBullets(dt) {
       const rr = b.r + e.r;
       if (dist2(b.x, b.y, e.x, e.y) < rr * rr) {
         hitEnemyWithBullet(b, e);
-        if (b.pierce > 0) { b.pierce--; b.hitList.push(e); }
+        if (b.pierce > 0) { b.pierce--; b.hitList.push(e); b.dmg *= UP.pierceKeep; }
         else { gone = true; break; }
       }
     }
     const B = Game.boss;
     if (!gone && B && !B.dead && b.hitList.indexOf(B) < 0 && dist2(b.x, b.y, B.x, B.y) < (b.r + B.r) ** 2) {
       hitEnemyWithBullet(b, B);
-      if (b.pierce > 0) { b.pierce--; b.hitList.push(B); } else gone = true;
+      if (b.pierce > 0) { b.pierce--; b.hitList.push(B); b.dmg *= UP.pierceKeep; } else gone = true;
     }
     if (gone) pBullets.removeAt(i);
   }
@@ -2285,7 +2322,7 @@ function updateOrbsAndPickups(dt) {
   }
 }
 
-// Level-ups bank an upgrade pick; picks are spent when the wave is cleared.
+// Level-ups bank an upgrade pick; picks are spent at the end of the round.
 function gainXp(v, silent) {
   Game.xp += v;
   if (!silent) { Game.xpStreak++; Game.xpStreakTimer = 0.4; Sound.play('xp', Game.xpStreak); }
@@ -2999,7 +3036,7 @@ const UI = {
       b.classList.toggle('off', !Settings[k]);
     });
   },
-  // Upgrade picks. kind 'wave': spend banked picks. kind 'round': boss reward + bonus picks + banked picks.
+  // Upgrade picks happen once per round, after the boss: boss reward + bonus pick + every banked pick.
   openPicks(kind, heal) {
     this.kind = kind;
     this.queue = [];
@@ -3024,7 +3061,7 @@ const UI = {
       $('levelTitle').textContent = this.current === 'epic' ? 'ROUND ' + Game.round + ' CLEAR' : 'UPGRADE ' + n + ' / ' + this.total;
       $('levelSub').textContent = this.current === 'epic'
         ? 'BOSS REWARD — choose one' + (this.heal ? '  ·  +' + this.heal + ' HP repaired' : '')
-        : 'Round ' + Game.round + ' cleared in ' + fmtTime(Game.time - Game.roundStart) + '  ·  ' + Game.roundKills + ' kills';
+        : (this.queue.length ? (this.queue.length + 1) + ' picks left' : 'Last pick') + '  ·  round ' + Game.round + ' cleared in ' + fmtTime(Game.time - Game.roundStart);
     } else {
       $('levelTitle').textContent = 'WAVE CLEAR';
       $('levelSub').textContent = 'Upgrade ' + n + ' of ' + this.total + '  ·  choose one';
